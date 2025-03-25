@@ -2,6 +2,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS # Runs locally
 
 def get_pdf_text(pdf_docs):
     text = ""
@@ -20,6 +22,11 @@ def get_text_chunks(text):
     )
     chunks = text_splitter.split_text(text)
     return chunks
+
+def get_vectorstore(text_chunks):
+    embeddings = HuggingFaceEmbeddings(model_name="NeuML/pubmedbert-base-embeddings")
+    vectorstore = FAISS.from_texts(texts = text_chunks, embedding= embeddings)
+    return vectorstore
 
 
 def main():
@@ -40,9 +47,9 @@ def main():
 
                 # get text
                 text_chunks = get_text_chunks(raw_text)
-                st.write(text_chunks)
 
                 # create vector store
+                vectorstore = get_vectorstore(text_chunks)
 
 
 if __name__ == '__main__':
