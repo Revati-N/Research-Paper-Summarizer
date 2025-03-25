@@ -3,10 +3,11 @@ from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS # Runs locally
+from langchain_community.vectorstores import FAISS # Runs locally
 from langchain.llms import ollama
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import conversational_retrieval
+from htmlTemplates import css, bot_template, user_template
 
 def get_pdf_text(pdf_docs):
     text = ""
@@ -45,11 +46,17 @@ def main():
     load_dotenv() 
     st.set_page_config(page_title="Research Paper Reviewer", page_icon=":memo:")
     
+    st.write(css, unsafe_allow_html= True)
+
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
 
     st.header("Research Paper Chat :memo:")
     st.text_input("Ask a question about your papers: ")
+
+    st.write(user_template.replace("{{MSG}}", "Hi bot"), unsafe_allow_html= True)
+    st.write(bot_template.replace("{{MSG}}", "Hello"), unsafe_allow_html= True)
+
 
     with st.sidebar: # DO NOT ADD A PARENTHESIS HERE
         st.subheader("Papers: ")
