@@ -4,10 +4,12 @@ from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS # Runs locally
-from langchain.llms import ollama
+from langchain_community.llms import HuggingFaceHub
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import conversational_retrieval
+from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
+import os
+
 
 def get_pdf_text(pdf_docs):
     text = ""
@@ -32,15 +34,29 @@ def get_vectorstore(text_chunks):
     vectorstore = FAISS.from_texts(texts = text_chunks, embedding= embeddings)
     return vectorstore
 
+load_dotenv()
+env_path = './.env'
+load_dotenv(dotenv_path=env_path)
+
+huggingface_token = os.getenv('HUGGINGFACEHUB_API_TOKEN')
+
 def get_conversation_chain(vectorstore):
-    llm = ollama()
+    llm = HuggingFaceHub(
+        repo_id="HuggingFaceTB/SmolVLM2-2.2B-Instruct",  # Smaller model
+        model_kwargs={},
+        huggingfacehub_api_token=huggingface_token
+    )
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    conversation_chain = conversational_retrieval.from_llm(
-        llm = llm,
-        retriever = vectorstore.as_retriever(),
-        memory = memory
+    conversation_chain = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=vectorstore.as_retriever(),
+        memory=memory
     )
     return conversation_chain
+
+def handle_userinput(user_question):
+    response = st.session_state.conversation({'question': user_question})
+    st.write(response)
 
 def main():
     load_dotenv() 
@@ -52,7 +68,9 @@ def main():
         st.session_state.conversation = None
 
     st.header("Research Paper Chat :memo:")
-    st.text_input("Ask a question about your papers: ")
+    user_question = st.text_input("Ask a question about your papers: ")
+    if user_question:
+        handle_userinput(user_question)
 
     st.write(user_template.replace("{{MSG}}", "Hi bot"), unsafe_allow_html= True)
     st.write(bot_template.replace("{{MSG}}", "Hello"), unsafe_allow_html= True)
