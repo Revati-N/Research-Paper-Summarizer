@@ -1,99 +1,56 @@
-import streamlit as st
-from dotenv import load_dotenv
-from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS # Runs locally
-from langchain_community.llms import HuggingFaceHub
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from htmlTemplates import css, bot_template, user_template
 import os
+import streamlit as st
+from PyPDF2 import PdfReader
+from langchain_google_genai import GoogleGenerativeAI
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain.memory import ConversationBufferMemory
+from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-
-def get_pdf_text(pdf_docs):
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
-
-def get_text_chunks(text):
-    text_splitter =CharacterTextSplitter(
-        separator="\n",
-        chunk_size = 1000,
-        chunk_overlap = 200,
-        length_function =len
-    )
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-def get_vectorstore(text_chunks):
-    embeddings = HuggingFaceEmbeddings(model_name="NeuML/pubmedbert-base-embeddings")
-    vectorstore = FAISS.from_texts(texts = text_chunks, embedding= embeddings)
-    return vectorstore
-
+# Load environment variables
 load_dotenv()
-env_path = './.env'
-load_dotenv(dotenv_path=env_path)
 
-huggingface_token = os.getenv('HUGGINGFACEHUB_API_TOKEN')
+# Streamlit page config
+st.set_page_config(page_title="Chat with PDF using Gemini", layout="wide")
+st.title("📄 Chat with PDF using Gemini 🤖")
 
-def get_conversation_chain(vectorstore):
-    llm = HuggingFaceHub(
-        repo_id="HuggingFaceTB/SmolVLM2-2.2B-Instruct",  # Smaller model
-        model_kwargs={},
-        huggingfacehub_api_token=huggingface_token
-    )
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(),
-        memory=memory
-    )
-    return conversation_chain
+# Function to extract text from uploaded PDF
+def extract_pdf_text(uploaded_file):
+    reader = PdfReader(uploaded_file)
+    return " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
 
-def handle_userinput(user_question):
-    response = st.session_state.conversation({'question': user_question})
-    st.write(response)
+# UI for PDF upload and user input
+uploaded_pdf = st.file_uploader("Upload your PDF", type="pdf")
+question = st.text_input("Ask a question about the PDF:")
 
-def main():
-    load_dotenv() 
-    st.set_page_config(page_title="Research Paper Reviewer", page_icon=":memo:")
-    
-    st.write(css, unsafe_allow_html= True)
+if uploaded_pdf and question:
+    with st.spinner("Processing..."):
+        pdf_text = extract_pdf_text(uploaded_pdf)
 
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
+        # ✅ Correct Gemini model name here
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-pro",  # ✅ Use this model
+            api_key=os.getenv("GOOGLE_API_KEY"),
+            temperature=0.7,
+            convert_system_message_to_human=True
+        )
 
-    st.header("Research Paper Chat :memo:")
-    user_question = st.text_input("Ask a question about your papers: ")
-    if user_question:
-        handle_userinput(user_question)
+        # Prompt template
+        prompt_template = PromptTemplate(
+            input_variables=["context", "question"],
+            template="Context: {context}\n\nQuestion: {question}\n\nAnswer:"
+        )
 
-    st.write(user_template.replace("{{MSG}}", "Hi bot"), unsafe_allow_html= True)
-    st.write(bot_template.replace("{{MSG}}", "Hello"), unsafe_allow_html= True)
+        # Conversation memory
+        memory = ConversationBufferMemory(input_key="question", memory_key="chat_history")
 
+        # LLMChain setup
+        chain = LLMChain(llm=llm, prompt=prompt_template, memory=memory)
 
-    with st.sidebar: # DO NOT ADD A PARENTHESIS HERE
-        st.subheader("Papers: ")
-        pdf_docs = st.file_uploader("Upload the papers and click 'Process'", accept_multiple_files=True)
-        
-        if st.button("Process"):
-            with st.spinner("Processing"):
-                # get pdf text
-                raw_text = get_pdf_text(pdf_docs)
+        # Run the chain
+        response = chain.run({"context": pdf_text, "question": question})
 
-                # get text
-                text_chunks = get_text_chunks(raw_text)
-
-                # create vector store
-                vectorstore = get_vectorstore(text_chunks)
-
-                # Conversation chain
-                st.session_state.conversation = get_conversation_chain(vectorstore)
-
-
-if __name__ == '__main__':
-    main()
+        # Show result
+        st.subheader("Answer:")
+        st.write(response)
