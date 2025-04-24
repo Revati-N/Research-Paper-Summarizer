@@ -3,6 +3,10 @@
 A powerful and user-friendly Streamlit web app that allows users to **upload multiple research papers**, **extract structured summaries**, and **ask questions directly from the PDFs** using **Google Gemini 1.5 Pro** and **LangChain**.
 
 ---
+## How it Looks: 
+![First Look](image/initial.jpg)
+
+---
 
 ## 🚀 Features
 
